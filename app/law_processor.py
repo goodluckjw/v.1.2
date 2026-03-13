@@ -1,4 +1,4 @@
-v1.2#
+#v1.2
 #gemoni가 수정함 
 
 import os
