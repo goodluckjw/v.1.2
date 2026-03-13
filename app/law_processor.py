@@ -294,8 +294,8 @@ def build_article_amendment(article, matches):
             rule_to_details[rule_text].append(detail)
             
     def detail_sort_key(d):
-        if d == "제목": return 0
-        if d == "본문" or d == "": return 1
+        if d == "제목": return (0, 0, 0)
+        if d == "본문" or d == "": return (1, 0, 0)
         hang = int(re.search(r'제(\d+)항', d).group(1)) if re.search(r'제(\d+)항', d) else 0
         ho = int(re.search(r'제(\d+)호', d).group(1)) if re.search(r'제(\d+)호', d) else 0
         return (2, hang, ho)
