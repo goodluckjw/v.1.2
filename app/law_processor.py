@@ -83,6 +83,7 @@ def get_law_list_from_api(query, search_type="2"):
     normalized_query = normalize_input_text(query)
     clean_query = re.sub(r'[^가-힣A-Za-z0-9\s]', ' ', normalized_query)
     words = clean_query.split()
+    
     stopwords = {"관한", "법률", "따른", "에따른", "의한", "대하여", "위한", "관하여"}
     filtered_words = [w for w in words if w not in stopwords]
     target_words = filtered_words if filtered_words else words
@@ -185,223 +186,172 @@ def preprocess_search_term(search_term):
     return normalized, False
 
 
+# [핵심] 사용자의 14가지 규칙 완벽 적용 함수
 def apply_josa_rule(A, B, josa):
-    A_has_b = has_batchim(A)
-    B_has_b = has_batchim(B)
-    B_has_r = has_rieul_batchim(B)
+    A_batchim = has_batchim(A)
+    B_batchim = has_batchim(B)
+    B_rieul = has_rieul_batchim(B)
 
-    # 0. 조사가 붙지 않은 경우 (의, 에 등 포함)
-    if not josa:
-        if not A_has_b:
-            if not B_has_b: return f'"{A}"를 "{B}"로 한다.'
-            if B_has_r: return f'"{A}"를 "{B}"로 한다.'
-            return f'"{A}"를 "{B}"으로 한다.'
-        else:
-            if not B_has_b: return f'"{A}"을 "{B}"로 한다.'
-            if B_has_r: return f'"{A}"을 "{B}"로 한다.'
-            return f'"{A}"을 "{B}"으로 한다.'
-
-    # 1. 을
-    if josa == "을":
-        if B_has_b:
-            if B_has_r: return f'"{A}"을 "{B}"로 한다.'
-            return f'"{A}"을 "{B}"으로 한다.'
-        return f'"{A}을"을 "{B}를"로 한다.'
-
-    # 2. 를
-    if josa == "를":
-        if B_has_b: return f'"{A}를"을 "{B}을"로 한다.'
-        return f'"{A}"를 "{B}"로 한다.'
-
-    # 3. 과
-    if josa == "과":
-        if B_has_b:
-            if B_has_r: return f'"{A}"을 "{B}"로 한다.'
-            return f'"{A}"을 "{B}"으로 한다.'
-        return f'"{A}과"를 "{B}와"로 한다.'
-
-    # 4. 와
-    if josa == "와":
-        if B_has_b: return f'"{A}와"를 "{B}과"로 한다.'
-        return f'"{A}"를 "{B}"로 한다.'
-
-    # 5. 이
-    if josa == "이":
-        if B_has_b:
-            if B_has_r: return f'"{A}"을 "{B}"로 한다.'
-            return f'"{A}"을 "{B}"으로 한다.'
-        return f'"{A}이"를 "{B}가"로 한다.'
-
-    # 6. 가
-    if josa == "가":
-        if B_has_b: return f'"{A}가"를 "{B}이"로 한다.'
-        return f'"{A}"를 "{B}"로 한다.'
-
-    # 7. 이나 (오류 교정 적용: 이나 유지)
-    if josa == "이나":
-        if B_has_b: return f'"{A}이나"를 "{B}이나"로 한다.'
-        return f'"{A}이나"를 "{B}나"로 한다.'
-
-    # 8. 나 (오류 교정 적용: 나 유지)
-    if josa == "나":
-        if B_has_b: return f'"{A}나"를 "{B}이나"로 한다.'
-        return f'"{A}나"를 "{B}나"로 한다.'
-
-    # 9. 으로
-    if josa == "으로":
-        if B_has_b:
-            if B_has_r: return f'"{A}으로"를 "{B}로"로 한다.'
-            return f'"{A}"을 "{B}"으로 한다.'
-        return f'"{A}으로"를 "{B}로"로 한다.'
-
-    # 10. 로
-    if josa == "로":
-        if A_has_b:
-            if B_has_b:
-                if B_has_r: return f'"{A}"을 "{B}"로 한다.'
-                return f'"{A}로"를 "{B}으로"로 한다.'
-            return f'"{A}"을 "{B}"로 한다.'
-        else:
-            if B_has_b:
-                if B_has_r: return f'"{A}"를 "{B}"로 한다.'
-                return f'"{A}로"를 "{B}으로"로 한다.'
-            return f'"{A}"를 "{B}"로 한다.'
-
-    # 11. 는
-    if josa == "는":
-        if B_has_b: return f'"{A}는"을 "{B}은"으로 한다.'
-        return f'"{A}"를 "{B}"로 한다.'
-
-    # 12. 은
-    if josa == "은":
-        if B_has_b:
-            if B_has_r: return f'"{A}"을 "{B}"로 한다.'
-            return f'"{A}"을 "{B}"으로 한다.'
-        return f'"{A}은"을 "{B}는"으로 한다.'
-
-    # 13. 란
-    if josa == "란":
-        if B_has_b: return f'"{A}란"을 "{B}이란"으로 한다.'
-        return f'"{A}"를 "{B}"로 한다.'
-
-    # 14. 이란
-    if josa == "이란":
-        if B_has_b:
-            if B_has_r: return f'"{A}"을 "{B}"로 한다.'
-            return f'"{A}"을 "{B}"으로 한다.'
-        return f'"{A}이란"을 "{B}란"으로 한다.'
-
-    return f'"{A}"을 "{B}"로 한다.'
-
-
-def format_location(loc):
-    loc = re.sub(r"제(?=항)", "", loc)
-    loc = re.sub(r"(\d+)\.호", r"\1호", loc)
-    loc = re.sub(r"([가-힣])\.목", r"\1목", loc)
-    return loc
-
-
-def parse_location(loc):
-    article_match = re.search(r"제(\d+)조(?:의(\d+))?", loc)
-    article_num = int(article_match.group(1)) if article_match else 0
-    article_sub = int(article_match.group(2)) if article_match and article_match.group(2) else 0
-    clause_match = re.search(r"제(\d+)항", loc)
-    clause_num = int(clause_match.group(1)) if clause_match else 0
-    item_match = re.search(r"제(\d+)호(?:의(\d+))?", loc)
-    item_num = int(item_match.group(1)) if item_match else 0
-    item_sub = int(item_match.group(2)) if item_match and item_match.group(2) else 0
-    subitem_match = re.search(r"([가-힣])목", loc)
-    subitem_num = ord(subitem_match.group(1)) - ord("가") + 1 if subitem_match else 0
-    is_title = 1 if "제목" in loc else 0
-    outside_parts = 1 if "외의 부분" in loc else 0
-    return (article_num, article_sub, clause_num, item_num, item_sub, outside_parts, subitem_num, is_title)
-
-
-def group_locations(loc_list):
-    if not loc_list:
-        return ""
-    formatted_locs = [format_location(loc) for loc in loc_list]
-    sorted_locs = sorted(formatted_locs, key=parse_location)
-    article_groups = {}
-    for loc in sorted_locs:
-        article_match = re.match(r"(제\d+조(?:의\d+)?)", loc)
-        if not article_match:
-            continue
-        article_num = article_match.group(1)
-        rest_part = loc[len(article_num):]
-        appendix_match = re.search(r"(제\d+호)의(\d+)", rest_part)
-        if appendix_match:
-            rest_part = rest_part.replace(appendix_match.group(0), f"{appendix_match.group(1)}의{appendix_match.group(2)}")
-        clause_part = ""
-        clause_match = re.search(r"(제\d+항)", rest_part)
-        if clause_match:
-            clause_part = clause_match.group(1)
-            rest_part = rest_part[rest_part.find(clause_part) + len(clause_part):]
-        title_part = ""
-        if " 제목" in loc:
-            title_part = " 제목 및 본문" if " 제목 및 본문" in loc else " 제목"
-            rest_part = rest_part.replace(title_part, "")
-        outside_part = ""
-        if " 각 목 외의 부분" in loc or " 외의 부분" in loc:
-            outside_part = " 각 목 외의 부분"
-            rest_part = rest_part.replace(" 각 목 외의 부분", "").replace(" 외의 부분", "")
-        item_goal_part = ""
-        if "제" in rest_part and ("호" in rest_part or "목" in rest_part):
-            appendix_match = re.search(r"(제\d+호)의(\d+)", rest_part)
-            if appendix_match:
-                item_goal_part = appendix_match.group(0)
+    if not josa:  # 0. 조사가 붙지 않은 경우
+        if not A_batchim:
+            if not B_batchim: return f'"{A}"를 "{B}"로 한다.'
             else:
-                item_match = re.match(r"제\d+호|[가-힣]목", rest_part.strip())
-                if item_match:
-                    item_goal_part = rest_part.strip()
-        article_groups.setdefault(article_num, []).append((clause_part, title_part, outside_part, item_goal_part))
-    result_parts = []
-    for article_num, items in sorted(article_groups.items(), key=lambda x: extract_article_num(x[0])):
-        clause_groups = {}
-        for clause, title, outside, item_goal in items:
-            key = (clause, title, outside)
-            clause_groups.setdefault(key, [])
-            if item_goal:
-                clause_groups[key].append(item_goal)
-        article_clause_parts = []
-        def clause_sort_key(entry):
-            clause = entry[0][0]
-            m = re.search(r"제(\d+)항", clause)
-            return int(m.group(1)) if m else 0
-        for (clause, title, outside), item_goals in sorted(clause_groups.items(), key=clause_sort_key):
-            loc_str = article_num
-            if title:
-                loc_str += title
-            if clause:
-                loc_str += clause
-            if outside:
-                loc_str += outside
-            if item_goals:
-                sorted_items = sorted(item_goals, key=lambda x: parse_location(f"{article_num}{clause}{x}"))
-                unique_items = []
-                for item in sorted_items:
-                    if item not in unique_items:
-                        unique_items.append(item)
-                if unique_items:
-                    loc_str += "ㆍ".join(item if item.startswith("제") else f"제{item}" for item in unique_items)
-            article_clause_parts.append(loc_str)
-        result_parts.extend(article_clause_parts)
-    if not result_parts:
-        return ""
-    if len(result_parts) == 1:
-        return result_parts[0]
-    return ", ".join(result_parts[:-1]) + f" 및 {result_parts[-1]}"
+                if B_rieul: return f'"{A}"를 "{B}"로 한다.'
+                else: return f'"{A}"를 "{B}"으로 한다.'
+        else:
+            if not B_batchim: return f'"{A}"을 "{B}"로 한다.'
+            else:
+                if B_rieul: return f'"{A}"을 "{B}"로 한다.'
+                else: return f'"{A}"을 "{B}"으로 한다.'
+
+    if josa == "을":  # 1
+        if B_batchim:
+            if B_rieul: return f'"{A}"을 "{B}"로 한다.'
+            else: return f'"{A}"을 "{B}"으로 한다.'
+        else: return f'"{A}을"을 "{B}를"로 한다.'
+
+    if josa == "를":  # 2
+        if B_batchim: return f'"{A}를"을 "{B}을"로 한다.'
+        else: return f'"{A}"를 "{B}"로 한다.'
+
+    if josa == "과":  # 3
+        if B_batchim:
+            if B_rieul: return f'"{A}"을 "{B}"로 한다.'
+            else: return f'"{A}"을 "{B}"으로 한다.'
+        else: return f'"{A}과"를 "{B}와"로 한다.'
+
+    if josa == "와":  # 4
+        if B_batchim: return f'"{A}와"를 "{B}과"로 한다.'
+        else: return f'"{A}"를 "{B}"로 한다.'
+
+    if josa == "이":  # 5
+        if B_batchim:
+            if B_rieul: return f'"{A}"을 "{B}"로 한다.'
+            else: return f'"{A}"을 "{B}"으로 한다.'
+        else: return f'"{A}이"를 "{B}가"로 한다.'
+
+    if josa == "가":  # 6
+        if B_batchim: return f'"{A}가"를 "{B}이"로 한다.'
+        else: return f'"{A}"를 "{B}"로 한다.'
+
+    if josa == "이나":  # 7
+        if B_batchim:
+            if B_rieul: return f'"{A}"을 "{B}"로 한다.'
+            else: return f'"{A}"을 "{B}"으로 한다.'
+        else: return f'"{A}이나"를 "{B}나"로 한다.'
+
+    if josa == "나":  # 8
+        if B_batchim: return f'"{A}나"를 "{B}이나"로 한다.'
+        else: return f'"{A}"를 "{B}"로 한다.'
+
+    if josa == "으로":  # 9
+        if B_batchim:
+            if B_rieul: return f'"{A}으로"를 "{B}로"로 한다.'
+            else: return f'"{A}"을 "{B}"으로 한다.'
+        else: return f'"{A}으로"를 "{B}로"로 한다.'
+
+    if josa == "로":  # 10
+        if A_batchim:
+            if B_batchim:
+                if B_rieul: return f'"{A}"을 "{B}"로 한다.'
+                else: return f'"{A}로"를 "{B}으로"로 한다.'
+            else: return f'"{A}"을 "{B}"로 한다.'
+        else:
+            if B_batchim:
+                if B_rieul: return f'"{A}"를 "{B}"로 한다.'
+                else: return f'"{A}로"를 "{B}으로"로 한다.'
+            else: return f'"{A}"를 "{B}"로 한다.'
+
+    if josa == "는":  # 11
+        if B_batchim: return f'"{A}는"을 "{B}은"으로 한다.'
+        else: return f'"{A}"를 "{B}"로 한다.'
+
+    if josa == "은":  # 12
+        if B_batchim:
+            if B_rieul: return f'"{A}"을 "{B}"로 한다.'
+            else: return f'"{A}"을 "{B}"으로 한다.'
+        else: return f'"{A}은"을 "{B}는"으로 한다.'
+
+    if josa == "란":  # 13
+        if B_batchim: return f'"{A}란"을 "{B}이란"으로 한다.'
+        else: return f'"{A}"를 "{B}"로 한다.'
+
+    if josa == "이란":  # 14
+        if B_batchim:
+            if B_rieul: return f'"{A}"을 "{B}"로 한다.'
+            else: return f'"{A}"을 "{B}"으로 한다.'
+        else: return f'"{A}이란"을 "{B}란"으로 한다.'
+        
+    return f'"{A}"를 "{B}"로 한다.'
 
 
-def add_gaggag_if_needed(rule, locs):
-    if len(locs) > 1 and "각각" not in rule:
-        m = re.match(r'^(".*?")(을|를|과|와|이|가|는|은|이나|나|으로|로|란|이란)\s+(".*?")(으로|로)( 한다\.)$', rule)
-        if m:
-            return f"{m.group(1)}{m.group(2)} 각각 {m.group(3)}{m.group(4)}{m.group(5)}"
-        m2 = re.match(r'^(".*?")\s+(".*?")(으로|로)( 한다\.)$', rule)
-        if m2:
-             return f"{m2.group(1)} 각각 {m2.group(2)}{m2.group(3)}{m2.group(4)}"
-    return rule
+# [핵심] 조문 단위로 묶어서 예쁜 포맷으로 병합하는 함수
+def build_article_amendment(article, matches):
+    rule_to_details = defaultdict(list)
+    for detail, base, replaced, josa in matches:
+        rule_text = apply_josa_rule(base, replaced, josa)
+        if detail not in rule_to_details[rule_text]:
+            rule_to_details[rule_text].append(detail)
+            
+    def detail_sort_key(d):
+        if d == "제목": return 0
+        if d == "본문" or d == "": return 1
+        hang = int(re.search(r'제(\d+)항', d).group(1)) if re.search(r'제(\d+)항', d) else 0
+        ho = int(re.search(r'제(\d+)호', d).group(1)) if re.search(r'제(\d+)호', d) else 0
+        return (2, hang, ho)
+
+    formatted_phrases = []
+    sorted_rule_groups = sorted(rule_to_details.items(), key=lambda x: min([detail_sort_key(d) for d in x[1]]))
+    
+    total_details = sum(len(v) for v in rule_to_details.values())
+    
+    for rule_text, details in sorted_rule_groups:
+        sorted_details = sorted(details, key=detail_sort_key)
+        
+        display_details = []
+        for d in sorted_details:
+            if not d:
+                display_details.append("본문" if total_details > 1 else "")
+            else:
+                display_details.append(d)
+                
+        display_details = [d for d in display_details if d]
+        
+        if not display_details:
+            detail_str = ""
+        elif len(display_details) == 1:
+            detail_str = display_details[0]
+        else:
+            detail_str = ", ".join(display_details[:-1]) + " 및 " + display_details[-1]
+            
+        if len(display_details) > 1 and "각각" not in rule_text:
+            parts = re.match(r'(".*?")(을|를) (".*?")(으로|로) 한다\.?', rule_text)
+            if parts:
+                rule_text = f'{parts.group(1)}{parts.group(2)} 각각 {parts.group(3)}{parts.group(4)} 한다.'
+        
+        rule_stripped = rule_text.replace(" 한다.", "")
+        
+        if detail_str:
+            formatted_phrases.append(f"{detail_str} 중 {rule_stripped}")
+        else:
+            formatted_phrases.append(f"중 {rule_stripped}")
+            
+    res = f"{article}"
+    if formatted_phrases:
+        if formatted_phrases[0].startswith("중 "):
+            res += f" {formatted_phrases[0]}"
+            formatted_phrases = formatted_phrases[1:]
+            if formatted_phrases:
+                res += ", " + ", ".join(formatted_phrases)
+        else:
+            res += " " + ", ".join(formatted_phrases)
+    
+    return res.strip() + " 한다."
+
+
+def is_allowed_char(c):
+    # 특수기호나 문장부호를 만나면 확장을 멈춤 (한글, 영문, 숫자, 가운뎃점만 허용)
+    return bool(re.match(r'[가-힣A-Za-z0-9ㆍ]', c))
 
 
 def run_amendment_logic(find_word, replace_word, exclude_laws=None, ignore_space=True):
@@ -416,6 +366,7 @@ def run_amendment_logic(find_word, replace_word, exclude_laws=None, ignore_space
     processed_replace_word = canonicalize_display_text(normalized_replace_word)
     
     laws = get_law_list_from_api(processed_find_word, search_type="2")
+    print(f"총 {len(laws)}개 법률이 검색되었습니다.")
     output_count = 0
     
     for idx, law in enumerate(laws):
@@ -426,23 +377,27 @@ def run_amendment_logic(find_word, replace_word, exclude_laws=None, ignore_space
             continue
             
         mst = law["MST"]
+        print(f"처리 중: {idx + 1}/{len(laws)} - {law_name} (MST: {mst})")
         xml_data = get_law_text_by_mst(mst)
         if not xml_data:
+            skipped_laws.append(f"{law_name}: XML 데이터 없음")
             continue
             
         try:
             tree = ET.fromstring(xml_data)
         except ET.ParseError as e:
+            skipped_laws.append(f"{law_name}: XML 파싱 오류 - {str(e)}")
             continue
             
         articles = tree.findall(".//조문단위")
         if not articles:
+            skipped_laws.append(f"{law_name}: 조문단위 없음")
             continue
             
-        chunk_map = defaultdict(list)
+        article_chunk_map = defaultdict(list)
         found_in_buchik = False
         
-        def extract_matches_from_text(target_text, location):
+        def extract_matches_from_text(target_text, raw_loc):
             pattern = build_space_flexible_pattern(processed_find_word) if ignore_space else re.compile(re.escape(processed_find_word))
             if not pattern:
                 return
@@ -451,31 +406,42 @@ def run_amendment_logic(find_word, replace_word, exclude_laws=None, ignore_space
                 start = m.start()
                 end = m.end()
                 
-                # 스마트 덩어리 확장 (한글, 영문, 숫자만 허용. 기호 만나면 즉시 중단)
-                while start > 0 and re.match(r'[가-힣A-Za-z0-9]', target_text[start-1]):
+                # [핵심] 똑똑한 경계 인식: 허용된 글자일 때만 덩어리 확장 (괄호, 따옴표 등에서 멈춤)
+                while start > 0 and is_allowed_char(target_text[start-1]):
                     start -= 1
-                while end < len(target_text) and re.match(r'[가-힣A-Za-z0-9]', target_text[end]):
+                while end < len(target_text) and is_allowed_char(target_text[end]):
                     end += 1
                     
-                raw_chunk = target_text[start:end]
+                token = target_text[start:end]
+                token_norm = normalize_input_text(token)
                 
-                # 지정된 14개 조사 리스트 (분리 대상)
-                josa_list = ["이란", "이나", "으로", "을", "를", "과", "와", "이", "가", "나", "로", "는", "은", "란"]
+                # 정확히 14개의 목표 조사만 타겟팅 (길이가 긴 것부터 확인하여 오작동 방지)
+                josa_list = ["이란", "으로", "이나", "은", "는", "이", "가", "을", "를", "과", "와", "나", "로", "란"]
                 found_josa = None
-                A_base = raw_chunk
+                base_chunk = token_norm
                 
                 for j in josa_list:
-                    if raw_chunk.endswith(j):
-                        temp_base = raw_chunk[:-len(j)]
+                    if token_norm.endswith(j):
+                        temp_base = token_norm[:-len(j)]
+                        # 조사를 떼어내도 원래 검색어가 파괴되지 않는지 확인
                         if pattern.search(temp_base):
                             found_josa = j
-                            A_base = temp_base
+                            base_chunk = temp_base
                             break
                             
-                A_canon = canonicalize_display_text(A_base)
-                B_canon = canonicalize_display_text(pattern.sub(processed_replace_word, A_canon, count=1))
+                base_chunk_canon = canonicalize_display_text(base_chunk)
+                replaced = canonicalize_display_text(pattern.sub(processed_replace_word, base_chunk_canon, count=1))
                 
-                chunk_map[(A_canon, B_canon, found_josa)].append(location)
+                # 위치(loc) 문자열을 조(Article)와 세부위치(Detail)로 분리
+                am = re.match(r"(제\d+조(?:의\d+)?)\s*(.*)", raw_loc)
+                if am:
+                    article_num = am.group(1)
+                    detail_part = am.group(2).strip()
+                else:
+                    article_num = raw_loc
+                    detail_part = ""
+                    
+                article_chunk_map[article_num].append((detail_part, base_chunk_canon, replaced, found_josa))
 
         for article in articles:
             jo_num = (article.findtext("조문번호", "") or "").strip()
@@ -506,8 +472,8 @@ def run_amendment_logic(find_word, replace_word, exclude_laws=None, ignore_space
                     if is_buchik:
                         found_in_buchik = True
                     else:
-                        loc = f"{article_id}{hang_part}{' 각 목 외의 부분' if has_outer_mok else ''}"
-                        extract_matches_from_text(hang_body, loc)
+                        loc = f"{article_id} {hang_part}{' 각 목 외의 부분' if has_outer_mok else ''}"
+                        extract_matches_from_text(hang_body, loc.strip())
                         
                 for ho in hang.findall("호"):
                     ho_num = ho.findtext("호번호")
@@ -519,8 +485,8 @@ def run_amendment_logic(find_word, replace_word, exclude_laws=None, ignore_space
                             found_in_buchik = True
                         else:
                             ho_label = f"제{ho_num}호" + (f"의{ho_sub_num}" if ho_sub_num else "")
-                            loc = f"{article_id}{hang_part}{ho_label}"
-                            extract_matches_from_text(ho_body, loc)
+                            loc = f"{article_id} {hang_part}{ho_label}"
+                            extract_matches_from_text(ho_body, loc.strip())
                             
                     for mok in ho.findall("목"):
                         mok_num = mok.findtext("목번호")
@@ -533,6 +499,144 @@ def run_amendment_logic(find_word, replace_word, exclude_laws=None, ignore_space
                                     found_in_buchik = True
                                 else:
                                     ho_label = f"제{ho_num}호" + (f"의{ho_sub_num}" if ho_sub_num else "")
-                                    loc = f"{article_id}{hang_part}{ho_label}{mok_num}목"
+                                    loc = f"{article_id} {hang_part}{ho_label}{mok_num}목"
                                     for line in mok_text.splitlines():
-                                        if contains_query(line, processed_
+                                        if contains_query(line, processed_find_word, ignore_space=ignore_space):
+                                            extract_matches_from_text(line, loc.strip())
+                                            
+        if not article_chunk_map:
+            if found_in_buchik:
+                skipped_laws.append(f"{law_name}: 부칙에서만 검색어 발견")
+            continue
+            
+        consolidated_rules = []
+        # 조문(Article) 단위로 그룹화하여 유려하게 병합
+        for article_id_key, matches in article_chunk_map.items():
+            amendment_line = build_article_amendment(article_id_key, matches)
+            consolidated_rules.append(amendment_line)
+            
+        if consolidated_rules:
+            output_count += 1
+            prefix = chr(9312 + output_count - 1) if output_count <= 20 else f"({output_count})"
+            amendment = f"{prefix} {law_name} 일부를 다음과 같이 개정한다.<br>"
+            for rule in consolidated_rules:
+                amendment += rule + "<br>"
+            amendment_results.append(amendment)
+        else:
+            skipped_laws.append(f"{law_name}: 결과줄이 생성되지 않음")
+            
+    if skipped_laws:
+        print("---누락된 법률 목록---")
+        for law in skipped_laws:
+            print(law)
+            
+    return amendment_results if amendment_results else ["⚠️ 개정 대상 조문이 없습니다."]
+
+
+def run_search_logic(query, unit="법률", include_title=False, ignore_space=True):
+    normalized_query = normalize_input_text(query)
+    result_dict = {}
+    candidate_laws = get_law_list_from_api(normalized_query, search_type="2")
+    if include_title:
+        merged = {law["MST"]: law for law in candidate_laws}
+        for law in get_law_list_from_api(normalized_query, search_type="1"):
+            merged[law["MST"]] = law
+        candidate_laws = list(merged.values())
+        
+    for law in candidate_laws:
+        xml_data = get_law_text_by_mst(law["MST"])
+        if not xml_data:
+            continue
+        try:
+            tree = ET.fromstring(xml_data)
+        except ET.ParseError:
+            continue
+        law_results = []
+        for article in tree.findall(".//조문단위"):
+            jo_num = (article.findtext("조문번호", "") or "").strip()
+            jo_sub_num = (article.findtext("조문가지번호", "") or "").strip()
+            article_id = make_article_number(jo_num, jo_sub_num)
+            jo_title = article.findtext("조문제목", "") or ""
+            jo_body = article.findtext("조문내용", "") or ""
+            hangs = article.findall("항")
+            output_chunks = []
+            
+            title_hit = include_title and contains_query(jo_title, normalized_query, ignore_space=ignore_space)
+            body_hit = contains_query(jo_body, normalized_query, ignore_space=ignore_space)
+            first_hang_attached = False
+            
+            if title_hit:
+                output_chunks.append(f"<b>[제목]</b> {highlight(jo_title, normalized_query, ignore_space=ignore_space)}")
+            if body_hit:
+                output_chunks.append(highlight(jo_body, normalized_query, ignore_space=ignore_space))
+                
+            for hang in hangs:
+                hang_body = hang.findtext("항내용", "") or ""
+                hang_hit = contains_query(hang_body, normalized_query, ignore_space=ignore_space)
+                hang_chunks = []
+                lower_hit = False
+                
+                for ho in hang.findall("호"):
+                    ho_body = ho.findtext("호내용", "") or ""
+                    if contains_query(ho_body, normalized_query, ignore_space=ignore_space):
+                        lower_hit = True
+                        hang_chunks.append("&nbsp;&nbsp;" + highlight(ho_body, normalized_query, ignore_space=ignore_space))
+                    for mok in ho.findall("목"):
+                        for m in mok.findall("목내용"):
+                            if m.text and contains_query(m.text, normalized_query, ignore_space=ignore_space):
+                                lines = [line.strip() for line in m.text.splitlines() if line.strip()]
+                                lines = [highlight(line, normalized_query, ignore_space=ignore_space) for line in lines]
+                                if lines:
+                                    lower_hit = True
+                                    hang_chunks.append("<div style='margin:0;padding:0'>" + "<br>".join("&nbsp;&nbsp;&nbsp;&nbsp;" + line for line in lines) + "</div>")
+                                    
+                if hang_hit or lower_hit:
+                    if not body_hit and not first_hang_attached:
+                        joined = f"{highlight(jo_body, normalized_query, ignore_space=ignore_space)} {highlight(hang_body, normalized_query, ignore_space=ignore_space)}".strip()
+                        output_chunks.append(joined)
+                        first_hang_attached = True
+                    elif not first_hang_attached:
+                        output_chunks.append(highlight(hang_body, normalized_query, ignore_space=ignore_space))
+                        first_hang_attached = True
+                    else:
+                        output_chunks.append(highlight(hang_body, normalized_query, ignore_space=ignore_space))
+                    output_chunks.extend(hang_chunks)
+                    
+            if output_chunks:
+                if jo_body:
+                    law_results.append("<br>".join(output_chunks))
+                else:
+                    law_results.append(f"<b>{article_id}</b><br>" + "<br>".join(output_chunks))
+                    
+        if law_results:
+            result_dict[law["법령명"]] = law_results
+            
+    return result_dict
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) < 3:
+        print("사용법: python law_processor.py <명령> <검색어> [바꿀단어]")
+        raise SystemExit(1)
+    command = sys.argv[1]
+    search_word = sys.argv[2]
+    if command == "search":
+        results = run_search_logic(search_word)
+        for law_name, snippets in results.items():
+            print(f"## {law_name}")
+            for snippet in snippets:
+                print(snippet)
+                print("---")
+    elif command == "amend":
+        if len(sys.argv) < 4:
+            print("바꿀단어를 입력하세요.")
+            raise SystemExit(1)
+        replace_word = sys.argv[3]
+        results = run_amendment_logic(search_word, replace_word)
+        for result in results:
+            print(result)
+            print()
+    else:
+        print(f"알 수 없는 명령: {command}")
+        raise SystemExit(1)
